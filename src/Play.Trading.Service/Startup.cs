@@ -104,7 +104,7 @@ namespace Play.Trading.Service
             // NOTE: This version is different from the Common lib b/c we're using Saga.
             services.AddMassTransit(configure =>
             {
-                configure.UsingPlayEconomyRabbitMq(retryConfigurator =>
+                configure.UsingPlayEconomyMessageBroker(Configuration, retryConfigurator =>
                 {
                     // retry 3 times within a 5 sec time frame.
                     // If exception is thrown then don't retry.
