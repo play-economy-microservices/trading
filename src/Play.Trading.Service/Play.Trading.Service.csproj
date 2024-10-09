@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <IsPublishable>true</IsPublishable>
+    <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
+    <ContainerRepository>play.trading</ContainerRepository>
   </PropertyGroup>
 
   <ItemGroup>
@@ -9,7 +12,7 @@
     <PackageReference Include="MassTransit.AspNetCore" Version="7.3.1" />
     <PackageReference Include="MassTransit.MongoDb" Version="7.3.1" />
     <PackageReference Include="Play.Catalog.Contracts" Version="1.0.1" />
-    <PackageReference Include="Play.Common" Version="1.0.8" />
+    <PackageReference Include="Play.Common" Version="1.0.9" />
     <PackageReference Include="Play.Identity.Contracts" Version="1.0.1" />
     <PackageReference Include="Play.Inventory.Contracts" Version="1.0.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
