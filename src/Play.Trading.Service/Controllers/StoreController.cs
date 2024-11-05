@@ -5,58 +5,60 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Play.Common;
+using Play.Trading.Service.Dtos;
 using Play.Trading.Service.Entities;
 
-namespace Play.Trading.Service.Controllers;
-
-/// <summary>
-/// This is the base controller for the entire Store experience.
-/// </summary>
-[ApiController]
-[Route("store")]
-[Authorize]
-public class StoreController : ControllerBase
+namespace Play.Trading.Service.Controllers
 {
-    private readonly IRepository<CatalogItem> catalogRepository;
-
-    private readonly IRepository<ApplicationUser> usersRepository;
-
-    private readonly IRepository<InventoryItem> inventoryRepository;
-
-    public StoreController(
-        IRepository<CatalogItem> catalogRepository,
-        IRepository<ApplicationUser> usersRepository,
-        IRepository<InventoryItem> inventoryRepository)
+    /// <summary>
+    /// This is the base controller for the entire Store experience.
+    /// </summary>
+    [ApiController]
+    [Route("store")]
+    [Authorize]
+    public class StoreController : ControllerBase
     {
-        this.catalogRepository = catalogRepository;
-        this.usersRepository = usersRepository;
-        this.inventoryRepository = inventoryRepository;
-    }
+        private readonly IRepository<CatalogItem> catalogRepository;
+        private readonly IRepository<ApplicationUser> usersRepository;
+        private readonly IRepository<InventoryItem> inventoryRepository;
 
-    [HttpGet]
-    public async Task<ActionResult<StoreDto>> GeAsync()
-    {
-        string userId = User.FindFirstValue("sub");
+        public StoreController(
+            IRepository<CatalogItem> catalogRepository,
+            IRepository<ApplicationUser> usersRepository,
+            IRepository<InventoryItem> inventoryRepository)
+        {
+            this.catalogRepository = catalogRepository;
+            this.usersRepository = usersRepository;
+            this.inventoryRepository = inventoryRepository;
+        }
 
-        var catalogitems = await catalogRepository.GetAllAsync();
-        var inventoryitems = await inventoryRepository.GetAllAsync(item => item.UserId == Guid.Parse(userId));
-        var user = await usersRepository.GetAsync(Guid.Parse(userId));
+        [HttpGet]
+        public async Task<ActionResult<StoreDto>> GetAsync()
+        {
+            string userId = User.FindFirstValue("sub");
 
-        // Construct model that will be presented to the user (i.e store experience)
-        var storeDto = new StoreDto(
-            catalogitems.Select(catalogitem =>
-                new StoreItemDto(
-                    catalogitem.Id,
-                    catalogitem.Name,
-                    catalogitem.Description,
-                    catalogitem.Price,
-                    inventoryitems.FirstOrDefault( // how much a user owns of the item
-                        inventoryitem => inventoryitem.CatalogItemId == catalogitem.Id)?.Quantity ?? 0
-                    )
+            var catalogItems = await catalogRepository.GetAllAsync();
+            var inventoryItems = await inventoryRepository.GetAllAsync(
+                item => item.UserId == Guid.Parse(userId)
+            );
+            var user = await usersRepository.GetAsync(Guid.Parse(userId));
+
+            // Construct model that will be presented to the user (i.e store experience)
+            var storeDto = new StoreDto(
+                catalogItems.Select(catalogItem =>
+                    new StoreItemDto(
+                        catalogItem.Id,
+                        catalogItem.Name,
+                        catalogItem.Description,
+                        catalogItem.Price,
+                        inventoryItems.FirstOrDefault( // how much a user owns of the item
+                            inventoryItem => inventoryItem.CatalogItemId == catalogItem.Id)?.Quantity ?? 0
+                        )
                 ),
                 user?.Gil ?? 0
-        );
+            );
 
-        return Ok(storeDto);
+            return Ok(storeDto);
+        }
     }
 }

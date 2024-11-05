@@ -1,45 +1,45 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using MassTransit;
+using Play.Catalog.Contracts;
 using Play.Common;
 using Play.Trading.Service.Entities;
-using static Play.Catalog.Contracts.Contracts;
 
-namespace Play.Trading.Service.Consumers;
-
-public class CatalogItemCreatedConsumer : IConsumer<CatalogItemCreated>
+namespace Play.Trading.Service.Consumers
 {
     /// <summary>
-    /// This is a referenece to the MongoDatabase Collection
+    /// This is a reference to the MongoDatabase Collection
     /// </summary>
-    private readonly IRepository<CatalogItem> repository;
-
-    public CatalogItemCreatedConsumer(IRepository<CatalogItem> repository)
+    public class CatalogItemCreatedConsumer : IConsumer<CatalogItemCreated>
     {
-        this.repository = repository;
-    }
+        private readonly IRepository<CatalogItem> repository;
 
-    // Ensure not to have consumed this message already, if the message is there then
-    // the item already exist in our CatalogItem db.(Avoid duplicates)
-    public async Task Consume(ConsumeContext<CatalogItemCreated> context)
-    {
-        var message = context.Message;
-
-        // Avoid duplicates
-        var item = await repository.GetAsync(message.ItemId);
-
-        if (item is not null)
+        public CatalogItemCreatedConsumer(IRepository<CatalogItem> repository)
         {
-            return;
+            this.repository = repository;
         }
 
-        item = new CatalogItem()
+        // Ensure not to have consumed this message already, if the message is there then
+        // the item already exist in our CatalogItem db.(Avoid duplicates)
+        public async Task Consume(ConsumeContext<CatalogItemCreated> context)
         {
-            Id = message.ItemId,
-            Name = message.Name,
-            Description = message.Description,
-            Price = message.Price,
-        };
+            var message = context.Message;
 
-        await repository.CreateAsync(item);
+            var item = await repository.GetAsync(message.ItemId);
+
+            if (item != null)
+            {
+                return;
+            }
+
+            item = new CatalogItem
+            {
+                Id = message.ItemId,
+                Name = message.Name,
+                Description = message.Description,
+                Price = message.Price
+            };
+
+            await repository.CreateAsync(item);
+        }
     }
 }

@@ -27,8 +27,8 @@ namespace Play.Trading.Service
 {
     public class Startup
     {
-
         private const string AllowedOriginSetting = "AllowedOrigin";
+
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
@@ -41,16 +41,15 @@ namespace Play.Trading.Service
         {
             // Configure Mongo Db Collection and RabbitMQ + Saga
             services.AddMongo()
-                .AddMongoRepository<CatalogItem>("catalogitems")
-                .AddMongoRepository<InventoryItem>("inventoryitems")
-                .AddMongoRepository<ApplicationUser>("users")
-                .AddJwtBearerAuthentication();
+                    .AddMongoRepository<CatalogItem>("catalogitems")
+                    .AddMongoRepository<InventoryItem>("inventoryitems")
+                    .AddMongoRepository<ApplicationUser>("users")
+                    .AddJwtBearerAuthentication();
             AddMassTransit(services);
-
 
             services.AddControllers(options =>
             {
-                // Avoid transforming Async suffix methods (IMPORTANT)
+                // Avoid transforming "Async" suffix methods
                 options.SuppressAsyncSuffixInActionNames = false;
             })
             .AddJsonOptions(options => options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
@@ -64,11 +63,10 @@ namespace Play.Trading.Service
             services.AddSingleton<IUserIdProvider, UserIdProvider>()
                     .AddSingleton<MessageHub>()
                     .AddSignalR();
-            
+
             // Health Checks
-            services
-                .AddHealthChecks()
-                .AddMongoDB(); 
+            services.AddHealthChecks()
+                    .AddMongoDb();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -80,7 +78,7 @@ namespace Play.Trading.Service
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Play.Trading.Service v1"));
 
-                // Allow communication with the frontend
+                // CORS for Frontend
                 app.UseCors(builder =>
                 {
                     builder.WithOrigins(Configuration[AllowedOriginSetting])
@@ -94,23 +92,23 @@ namespace Play.Trading.Service
 
             app.UseRouting();
 
-            app.UseAuthentication(); // for Identity
-
+            // For Identity
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
                 endpoints.MapHub<MessageHub>("/messagehub"); // SignalR Hub communication endpoint
-                
-                // Map endpoints to Healthchecks
-                endpoints.MapPlayEconomyHealthChecks();
+                endpoints.MapPlayEconomyHealthChecks();  // Map endpoints to HealthChecks
             });
         }
 
+        /// <summary>
+        /// This method is different from the Common lib because we're using Sagas.
+        /// </summary>
         private void AddMassTransit(IServiceCollection services)
         {
-            // NOTE: This version is different from the Common lib b/c we're using Saga.
             services.AddMassTransit(configure =>
             {
                 configure.UsingPlayEconomyMessageBroker(Configuration, retryConfigurator =>
@@ -120,31 +118,34 @@ namespace Play.Trading.Service
                     retryConfigurator.Interval(3, TimeSpan.FromSeconds(5));
                     retryConfigurator.Ignore(typeof(UnknownItemException));
                 });
-                configure.AddConsumers(Assembly.GetEntryAssembly());
 
                 // Set up Mongo DB for Saga
+                configure.AddConsumers(Assembly.GetEntryAssembly());
                 configure.AddSagaStateMachine<PurchaseStateMachine, PurchaseState>(sagaConfigurator =>
                 {
                     sagaConfigurator.UseInMemoryOutbox();
                 })
-                .MongoDbRepository(r =>
-                {
-                    var serviceSettings = Configuration.GetSection(nameof(ServiceSettings)).Get<ServiceSettings>();
-                    var mongoSettings = Configuration.GetSection(nameof(MongoDbSettings)).Get<MongoDbSettings>();
+                    .MongoDbRepository(r =>
+                    {
+                        var serviceSettings = Configuration.GetSection(nameof(ServiceSettings))
+                                                           .Get<ServiceSettings>();
+                        var mongoSettings = Configuration.GetSection(nameof(MongoDbSettings))
+                                                           .Get<MongoDbSettings>();
 
-                    r.Connection = mongoSettings.ConnectionString;
-                    r.DatabaseName = serviceSettings.ServiceName;
-                });
+                        r.Connection = mongoSettings.ConnectionString;
+                        r.DatabaseName = serviceSettings.ServiceName;
+                    });
             });
 
-            // Endpoint configuration to send commands
             var queueSettings = Configuration.GetSection(nameof(QueueSettings)).Get<QueueSettings>();
+            
+            // Endpoint configuration to send commands
             EndpointConvention.Map<GrantItems>(new Uri(queueSettings.GrantItemsQueueAddress));
             EndpointConvention.Map<DebitGil>(new Uri(queueSettings.DebitGilQueueAddress));
             EndpointConvention.Map<SubtractItems>(new Uri(queueSettings.SubtractItemsQueueAddress));
 
             services.AddMassTransitHostedService();
-            services.AddGenericRequestClient(); // Register Request Clients
+            services.AddGenericRequestClient();
         }
     }
 }

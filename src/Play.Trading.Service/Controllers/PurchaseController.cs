@@ -1,72 +1,74 @@
-﻿using System;
+using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using MassTransit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Play.Trading.Service.Contracts;
+using Play.Trading.Service.Dtos;
 using Play.Trading.Service.StateMachines;
 
-namespace Play.Trading.Service.Controllers;
-
-[ApiController]
-[Route("purchase")]
-[Authorize]
-public class PurchaseController : ControllerBase
+namespace Play.Trading.Service.Controllers
 {
-	/// <summary>
-	/// Instance to publish messages.
-	/// </summary>
-	private readonly IPublishEndpoint publishEndpoint;
+    [ApiController]
+    [Route("purchase")]
+    [Authorize]
+    public class PurchaseController : ControllerBase
+    {
+        private readonly IPublishEndpoint publishEndpoint;
+        
+        /// <summary>
+        /// To send or publish requests and wait for a response. The request client is asynchronous.
+        /// </summary>
+        private readonly IRequestClient<GetPurchaseState> purchaseClient;
 
-	/// <summary>
-	/// To send or publish requests and wait for a response. The request client is asynchronous.
-	/// </summary>
-	private readonly IRequestClient<GetPurchaseState> purchaseClient;
+        public PurchaseController(
+            IPublishEndpoint publishEndpoint,
+            IRequestClient<GetPurchaseState> purchaseClient)
+        {
+            this.publishEndpoint = publishEndpoint;
+            this.purchaseClient = purchaseClient;
+        }
 
-	public PurchaseController(IPublishEndpoint publishEndpoint, IRequestClient<GetPurchaseState> purchaseClient)
-	{
-		this.publishEndpoint = publishEndpoint;
-		this.purchaseClient = purchaseClient;
-	}
+        /// <see cref="PurchaseStateMachine.ConfigureAny"/> when receiving GetPurchaseState. 
+        [HttpGet("status/{idempotencyId}")]
+        public async Task<ActionResult<PurchaseDto>> GetStatusAsync(Guid idempotencyId)
+        {
+            var response = await purchaseClient.GetResponse<PurchaseState>(new GetPurchaseState(idempotencyId));
 
-	/// <see cref="PurchaseStateMachine.ConfigureAny"/> when receiving GetPurchaseState. 
-	[HttpGet("status/{idempotencyId}")]
-	public async Task<ActionResult<PurchaseDto>> GetStatusAsync(Guid idempotencyId)
-	{
-		var response = await purchaseClient.GetResponse<PurchaseState>(new GetPurchaseState(idempotencyId));
-		var purchaseState = response.Message;
+            var purchaseState = response.Message;
 
-		// This will be returned only in this service.
-		var purchase = new PurchaseDto(
-			purchaseState.UserId,
-			purchaseState.ItemId,
-			purchaseState.PurchaseTotal,
-			purchaseState.Quantity,
-			purchaseState.CurrentState,
-			purchaseState.ErrorMessage,
-			purchaseState.Received,
-			purchaseState.LastUpdated
-		);
+            var purchase = new PurchaseDto(
+                purchaseState.UserId,
+                purchaseState.ItemId,
+                purchaseState.PurchaseTotal,
+                purchaseState.Quantity,
+                purchaseState.CurrentState,
+                purchaseState.ErrorMessage,
+                purchaseState.Received,
+                purchaseState.LastUpdated);
 
-		return Ok(purchase);
-	}
+            return Ok(purchase);
+        }
 
+        /// <see cref="PurchaseStateMachine.ConfigureInitialState"/> when receiving PurchaseRequested.
+        [HttpPost]
+        public async Task<IActionResult> PostAsync(SubmitPurchaseDto purchase)
+        {
+            // Identity Service Provider
+            var userId = User.FindFirstValue("sub"); 
 
-	/// <see cref="PurchaseStateMachine.ConfigureInitialState"/> when receiving PurchaseRequested.
-	[HttpPost]
-	public async Task<IActionResult> PostAsync(SubmitPurchaseDto purchase)
-	{
-		var userId = User.FindFirst("sub").Value; // Identity Service Provider
-												  // var correlationId = Guid.NewGuid();
+            // This will be publish for other services.
+            var message = new PurchaseRequested(
+                Guid.Parse(userId),
+                purchase.ItemId.Value,
+                purchase.Quantity,
+                purchase.IdempotencyId.Value
+            );
 
-		// This will be publish for other services.
-		var message = new PurchaseRequested(
-			Guid.Parse(userId),
-			purchase.ItemId.Value,
-			purchase.Quantity,
-			purchase.IdempotencyId.Value
-			);
+            await publishEndpoint.Publish(message);
 
-		await publishEndpoint.Publish(message);
-		return AcceptedAtAction(nameof(GetStatusAsync), new { purchase.IdempotencyId }, new { purchase.IdempotencyId });
-	}
+            return AcceptedAtAction(nameof(GetStatusAsync), new { purchase.IdempotencyId }, new { purchase.IdempotencyId });
+        }
+    }
 }

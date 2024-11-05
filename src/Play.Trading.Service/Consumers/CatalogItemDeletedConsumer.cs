@@ -1,36 +1,36 @@
-﻿using System;
 using System.Threading.Tasks;
 using MassTransit;
+using Play.Catalog.Contracts;
 using Play.Common;
 using Play.Trading.Service.Entities;
-using static Play.Catalog.Contracts.Contracts;
 
-namespace Play.Trading.Service.Consumers;
-
-public class CatalogItemDeletedConsumer : IConsumer<CatalogItemDeleted>
+namespace Play.Trading.Service.Consumers
 {
     /// <summary>
     /// This is a referenece to the MongoDatabase Collection
     /// </summary>
-    private readonly IRepository<CatalogItem> repository;
-
-    public CatalogItemDeletedConsumer(IRepository<CatalogItem> repository)
+    public class CatalogItemDeletedConsumer : IConsumer<CatalogItemDeleted>
     {
-        this.repository = repository;
-    }
+        private readonly IRepository<CatalogItem> repository;
 
-    // If the Catalog Item is null then it doesn't exist. Otherwise, proceed with removal.
-    public async Task Consume(ConsumeContext<CatalogItemDeleted> context)
-    {
-        var message = context.Message;
-
-        var item = await repository.GetAsync(message.ItemId);
-
-        if (item is null)
+        public CatalogItemDeletedConsumer(IRepository<CatalogItem> repository)
         {
-            return;
+            this.repository = repository;
         }
 
-        await repository.RemoveAsync(message.ItemId);
+        // If the Catalog Item is null then it doesn't exist. Otherwise, proceed with removal.
+        public async Task Consume(ConsumeContext<CatalogItemDeleted> context)
+        {
+            var message = context.Message;
+
+            var item = await repository.GetAsync(message.ItemId);
+
+            if (item == null)
+            {
+                return;
+            }
+
+            await repository.RemoveAsync(message.ItemId);
+        }
     }
 }

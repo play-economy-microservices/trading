@@ -4,42 +4,44 @@ using Play.Common;
 using Play.Inventory.Contracts;
 using Play.Trading.Service.Entities;
 
-namespace Play.Trading.Service.Consumers;
-
-public class InventoryItemUpdatedConsumer : IConsumer<InventoryItemUpdated>
+namespace Play.Trading.Service.Consumers
 {
     /// <summary>
-    /// Reference to the InventoryItem db.
+    /// This is a reference to the MongoDatabase Collection
     /// </summary>
-    private readonly IRepository<InventoryItem> repository;
-
-    public InventoryItemUpdatedConsumer(IRepository<InventoryItem> repository)
+    public class InventoryItemUpdatedConsumer : IConsumer<InventoryItemUpdated>
     {
-        this.repository = repository;
-    }
+        private readonly IRepository<InventoryItem> repository;
 
-    public async Task Consume(ConsumeContext<InventoryItemUpdated> context)
-    {
-        var message = context.Message;
+        public InventoryItemUpdatedConsumer(IRepository<InventoryItem> repository)
+        {
+            this.repository = repository;
+        }
 
         // Get the item and if it's null create a new item, otherwise updated the quantity.
-        var inventoryItem = await repository.GetAsync(item => item.Id == message.UserId && item.CatalogItemId == message.CatalogItemId);
-
-        if (inventoryItem is null)
+        public async Task Consume(ConsumeContext<InventoryItemUpdated> context)
         {
-            inventoryItem = new InventoryItem
+            var message = context.Message;
+
+            var inventoryItem = await repository.GetAsync(
+                item => item.UserId == message.UserId && item.CatalogItemId == message.CatalogItemId);
+
+            if (inventoryItem == null)
             {
-                CatalogItemId = message.CatalogItemId,
-                UserId = message.UserId,
-                Quantity = message.NewTotalQuantity
-            };
+                inventoryItem = new InventoryItem
+                {
+                    CatalogItemId = message.CatalogItemId,
+                    UserId = message.UserId,
+                    Quantity = message.NewTotalQuantity
+                };
 
-            await repository.CreateAsync(inventoryItem);
-        }
-        else
-        {
-            inventoryItem.Quantity = message.NewTotalQuantity;
-            await repository.UpdateAsync(inventoryItem);
+                await repository.CreateAsync(inventoryItem);
+            }
+            else
+            {
+                inventoryItem.Quantity = message.NewTotalQuantity;
+                await repository.UpdateAsync(inventoryItem);
+            }
         }
     }
 }

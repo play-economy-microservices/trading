@@ -1,14 +1,13 @@
-﻿using System;
+using System;
 
-namespace Play.Trading.Service;
+namespace Play.Trading.Service.Contracts
+{
+    public record PurchaseRequested(
+        Guid UserId,
+        Guid ItemId,
+        int Quantity,
+        Guid CorrelationId
+    );
 
-/// <summary>
-/// These records will only be used within Trading service.
-/// </summary>
-public record PurchaseRequested(
-    Guid UserId,
-    Guid ItemId,
-    int Quantity,
-    Guid CorrelationId);
-
-public record GetPurchaseState(Guid CorrelationId);
+    public record GetPurchaseState(Guid CorrelationId);
+}

@@ -3,7 +3,7 @@ Play Economy Trading microservice
 
 ## Build the docker image
 ```powershell
-$version="1.0.1"
+$version="1.0.2"
 $env:GH_OWNER="play-economy-microservices"
 $env:GH_PAT="[PAT HERE]"
 $appname="playeconomycontainerregistry"
