@@ -1,0 +1,22 @@
+microserviceName: "trading"
+
+# docker image
+image:
+  repository: playeconomyacr.azurecr.io/play.trading
+  tag: 1.0.3
+
+# Dictionary of Enviroment Variables
+envVariables:
+  ASPNETCORE_URLS: "http://+:5006"
+  ServiceSettings__Authority: https://playeconomy-gateway.westus2.cloudapp.azure.com/identity/svc
+
+resources:
+  limits:
+    memory: "128Mi"
+    cpu: "150m"
+
+# Container specifications
+container:
+  port: 5006
+
+identityClientId: 28820185-275e-4d40-8af5-876081c9d34a

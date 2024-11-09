@@ -1,7 +1,9 @@
 # play.trading
+
 Play Economy Trading microservice
 
 ## Build the docker image
+
 ```powershell
 $version="1.0.2"
 $env:GH_OWNER="play-economy-microservices"
@@ -11,16 +13,18 @@ docker build --secret id=GH_OWNER --secret id=GH_PAT -t "$appname.azurecr.io/pla
 ```
 
 ## Run the docker image
+
 ```powershell
 $cosmosDbConnString="[CONN STRING HERE]"
 $serviceBusConnString="[CONN STRING HERE]"
-docker run -it --rm -p 5006:5006 --name trading -e 
-MongoDBSettings__ConnectionString=$cosmosDbConnString -e 
+docker run -it --rm -p 5006:5006 --name trading -e
+MongoDBSettings__ConnectionString=$cosmosDbConnString -e
 ServiceBusSettings__ConnectionString=$serviceBusConnString -e
 ServiceSettings__MessageBroker="SERVICEBUS" play.trading:$version
 ```
 
 ## Publishing the Docker image
+
 ```powershell
 $appname="playeconomycontainerregistry"
 $version="1.0.1"
@@ -50,4 +54,27 @@ $AKS_OIDC_ISSUER=az aks show -n $appname -g $appname --query "oidcIssuerProfile.
 
 az identity federated-credential create --name $namespace --identity-name $namespace
 --resource-group $appname --issuer $AKS_OIDC_ISSUER --subject "system:serviceaccount:${namespace}:${namespace}-serviceaccount"
+```
+
+## Install the Helm Chart
+
+```powershell
+$appname="playeconomyacr"
+$namespace="trading"
+
+$helmUser=[guid]::Empty.Guid
+$helmPassword=az acr login --name $appname --expose-token --output tsv --query accessToken
+
+# This is no longer needed after Helm v3.8.0
+
+$env:HELM_EXPERIMENTAL_OCI=1
+
+# authenticate
+
+helm registry login "$appname.azurecr.io" --username $helmUser --password $helmPassword
+
+# Install the Helm Chart from ACR with trading Values
+
+$chartVersion="0.1.0"
+helm upgrade trading-service oci://$appname.azurecr.io/helm/microservice --version $chartVersion -f ./helm/values.yaml -n $namespace --install
 ```
