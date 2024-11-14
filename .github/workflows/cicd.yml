@@ -1,0 +1,53 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: CICD
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  generate-version:
+    runs-on: ubuntu-latest
+
+    permissions: # to publish the new tag to github
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Github Tag Bump
+      id: tag_bump
+      uses: anothrNick/github-tag-action@1.67.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        INITIAL_VERSION: 1.0.2 # this comes from your Contracts pkg
+        DEFAULT_BUMP: patch # 1.0.x
+        
+    outputs:
+      new_version: ${{ steps.tag_bump.outputs.new_tag }} # store the generated tag
+
+  # build docker image
+  build-and-deploy-service:
+    
+    runs-on: ubuntu-latest
+    needs: generate-version
+
+    env:
+      APP_NAME: play-economy-microservices
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v4 # checkout the latest code
+
+    - name: Build and push Docker images
+      uses: docker/build-push-action@v6.9.0
+      with:
+        # List of secrets to expose to the build (e.g., key=string, GIT_AUTH_TOKEN=mytoken)
+        secrets: |
+          "GH_OWNER=${{github.repository_owner}}"
+          "GH_PAT=${{secrets.GH_PAT}}"
+        tags: ${{env.APP_NAME}}.azurecr.io/play.catalog:${{ needs.generate-version.outputs.new_version }}
