@@ -1,5 +1,4 @@
 using System;
-using Automatonymous;
 using MassTransit;
 using Microsoft.Extensions.Logging;
 using Play.Identity.Contracts;
@@ -69,37 +68,37 @@ namespace Play.Trading.Service.StateMachines
                     .Then(context =>
                     {
                         // For clarification, instance = this class instance and Data = Incoming Request (i.e PurchaseRequested)
-                        context.Instance.UserId = context.Data.UserId;
-                        context.Instance.ItemId = context.Data.ItemId;
-                        context.Instance.Quantity = context.Data.Quantity;
-                        context.Instance.Received = DateTimeOffset.UtcNow;
-                        context.Instance.LastUpdated = context.Instance.Received;
+                        context.Saga.UserId = context.Message.UserId;
+                        context.Saga.ItemId = context.Message.ItemId;
+                        context.Saga.Quantity = context.Message.Quantity;
+                        context.Saga.Received = DateTimeOffset.UtcNow;
+                        context.Saga.LastUpdated = context.Saga.Received;
                         
                         logger.LogInformation(
                             "Calculating total price for purchase with CorrelationId {CorrelationId}...",
-                            context.Instance.CorrelationId);
+                            context.Saga.CorrelationId);
                     })
                     .Activity(x => x.OfType<CalculatePurchaseTotalActivity>()) // 2. Perform the calculation
                     .Send(context => new GrantItems( // 3. Send the GrantItems request to Inventory microservice
-                        context.Instance.UserId,
-                        context.Instance.ItemId,
-                        context.Instance.Quantity,
-                        context.Instance.CorrelationId))
+                        context.Saga.UserId,
+                        context.Saga.ItemId,
+                        context.Saga.Quantity,
+                        context.Saga.CorrelationId))
                     .TransitionTo(Accepted) // 4. Happy Case!
                     .Catch<Exception>(ex => ex.
                         Then(context =>
                         {
                             // Store the exception (if any) into the instance state
-                            context.Instance.ErrorMessage = context.Exception.Message;
-                            context.Instance.LastUpdated = DateTimeOffset.UtcNow;
+                            context.Saga.ErrorMessage = context.Exception.Message;
+                            context.Saga.LastUpdated = DateTimeOffset.UtcNow;
                             
                             logger.LogError(
                                 context.Exception, 
                                 "Could not calculate the total price of purchase with CorrelationId {CorrelationId}, Error: {ErrorMessage}",
-                                context.Instance.CorrelationId, context.Instance.ErrorMessage);
+                                context.Saga.CorrelationId, context.Saga.ErrorMessage);
                         })
                         .TransitionTo(Faulted)
-                        .ThenAsync(async context => await hub.SendStatusAsync(context.Instance))) // let the client know
+                        .ThenAsync(async context => await hub.SendStatusAsync(context.Saga))) // let the client know
             );
         }
 
@@ -111,32 +110,32 @@ namespace Play.Trading.Service.StateMachines
                 When(InventoryItemsGranted) // Inventory sends this back
                     .Then(context =>
                     {
-                        context.Instance.LastUpdated = DateTimeOffset.UtcNow;
+                        context.Saga.LastUpdated = DateTimeOffset.UtcNow;
                         
                         logger.LogInformation(
                             "Items of purchase with CorrelationId {CorrelationId} have been granted to user {UserId}", 
-                            context.Instance.CorrelationId, 
-                            context.Instance.UserId);
+                            context.Saga.CorrelationId, 
+                            context.Saga.UserId);
                     })
                     .Send(context => new DebitGil( // Send to Identity service
-                        context.Instance.UserId,
-                        context.Instance.PurchaseTotal.Value,
-                        context.Instance.CorrelationId
+                        context.Saga.UserId,
+                        context.Saga.PurchaseTotal.Value,
+                        context.Saga.CorrelationId
                     ))
                     .TransitionTo(ItemsGranted),
                 When(GrantItemsFaulted) // This section is for when things fail in some other service
                     .Then(context =>
                     {
-                        context.Instance.ErrorMessage = context.Data.Exceptions[0].Message;
-                        context.Instance.LastUpdated = DateTimeOffset.UtcNow;
+                        context.Saga.ErrorMessage = context.Message.Exceptions[0].Message;
+                        context.Saga.LastUpdated = DateTimeOffset.UtcNow;
                         
                         logger.LogError(
                             "Could not grant items for purchase with CorrelationId {CorrelationId}, Error: {ErrorMEssage}", 
-                            context.Instance.CorrelationId, 
-                            context.Instance.ErrorMessage);
+                            context.Saga.CorrelationId, 
+                            context.Saga.ErrorMessage);
                     })
                     .TransitionTo(Faulted)
-                    .ThenAsync(async context => await hub.SendStatusAsync(context.Instance)) // let the client know
+                    .ThenAsync(async context => await hub.SendStatusAsync(context.Saga)) // let the client know
                 );
         }
 
@@ -148,34 +147,34 @@ namespace Play.Trading.Service.StateMachines
                 When(GilDebited) // Identity sends this event back
                     .Then(context =>
                     {
-                        context.Instance.LastUpdated = DateTimeOffset.UtcNow;
+                        context.Saga.LastUpdated = DateTimeOffset.UtcNow;
                         
                         logger.LogInformation(
                             "The total price of purchase with CorrelationId {CorrelationId} has been debited from user {UserId}. Purchase Complete",
-                            context.Instance.CorrelationId,
-                            context.Instance.UserId);
+                            context.Saga.CorrelationId,
+                            context.Saga.UserId);
                     })
                     .TransitionTo(Completed) // Once Identity sends GilDebit successfully = Done!
-                    .ThenAsync(async context => await hub.SendStatusAsync(context.Instance)), // let the client know
+                    .ThenAsync(async context => await hub.SendStatusAsync(context.Saga)), // let the client know
                 When(DebitGilFaulted) // If something goes wrong, we must revert/tell the service to subtract
                     .Send(context => new SubtractItems( // Inventory will handle this
-                        context.Instance.UserId,
-                        context.Instance.ItemId,
-                        context.Instance.Quantity,
-                        context.Instance.CorrelationId
+                        context.Saga.UserId,
+                        context.Saga.ItemId,
+                        context.Saga.Quantity,
+                        context.Saga.CorrelationId
                     ))
                     .Then(context =>
                     {
-                        context.Instance.ErrorMessage = context.Data.Exceptions[0].Message;
-                        context.Instance.LastUpdated = DateTimeOffset.UtcNow;
+                        context.Saga.ErrorMessage = context.Message.Exceptions[0].Message;
+                        context.Saga.LastUpdated = DateTimeOffset.UtcNow;
                         
                         logger.LogError("Could not debit the total price of purchase with CorrelationId {CorrelationId} from user {UserId}, Error: {ErrorMessage}",
-                            context.Instance.CorrelationId,
-                            context.Instance.UserId,
-                            context.Instance.ErrorMessage);
+                            context.Saga.CorrelationId,
+                            context.Saga.UserId,
+                            context.Saga.ErrorMessage);
                     })
                     .TransitionTo(Faulted)
-                    .ThenAsync(async context => await hub.SendStatusAsync(context.Instance)) // let the client know
+                    .ThenAsync(async context => await hub.SendStatusAsync(context.Saga)) // let the client know
             );
         }
 
@@ -193,7 +192,7 @@ namespace Play.Trading.Service.StateMachines
         {
             DuringAny(
                 When(GetPurchaseState)
-                    .Respond(x => x.Instance)
+                    .Respond(x => x.Saga)
             );
         }
 
