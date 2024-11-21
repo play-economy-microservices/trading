@@ -9,6 +9,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Play.Common.HealthChecks;
 using Play.Common.Identity;
 using Play.Common.Logging;
@@ -70,6 +72,20 @@ namespace Play.Trading.Service
             
             // Seq Logging
             services.AddSeqLogging(Configuration);
+            
+            // Telemetry Tracing
+            services.AddOpenTelemetryTracing(builder =>
+            {
+                var serviceSettings = Configuration.GetSection(nameof(ServiceSettings)).Get<ServiceSettings>();
+
+                // collect traces from the service and mass transit
+                builder.AddSource(serviceSettings.ServiceName)
+                    .AddSource("MassTransit")
+                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName: serviceSettings.ServiceName))
+                    .AddHttpClientInstrumentation() // outside traffic
+                    .AddAspNetCoreInstrumentation() // core traffic
+                    .AddConsoleExporter();
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
