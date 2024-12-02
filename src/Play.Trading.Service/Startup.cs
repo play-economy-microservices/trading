@@ -9,13 +9,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using Play.Common.HealthChecks;
 using Play.Common.Identity;
 using Play.Common.Logging;
 using Play.Common.MassTransit;
 using Play.Common.MongoDB;
+using Play.Common.OpenTelemetry;
 using Play.Common.Settings;
 using Play.Identity.Contracts;
 using Play.Inventory.Contracts;
@@ -70,22 +69,10 @@ namespace Play.Trading.Service
             services.AddHealthChecks()
                     .AddMongoDb();
             
-            // Seq Logging
-            services.AddSeqLogging(Configuration);
+            // Seq Logging & OpenTelemetry Tracing
+            services.AddSeqLogging(Configuration)
+                    .AddTracing(Configuration);
             
-            // Telemetry Tracing
-            services.AddOpenTelemetryTracing(builder =>
-            {
-                var serviceSettings = Configuration.GetSection(nameof(ServiceSettings)).Get<ServiceSettings>();
-
-                // collect traces from the service and mass transit
-                builder.AddSource(serviceSettings.ServiceName)
-                    .AddSource("MassTransit")
-                    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName: serviceSettings.ServiceName))
-                    .AddHttpClientInstrumentation() // outside traffic
-                    .AddAspNetCoreInstrumentation() // core traffic
-                    .AddConsoleExporter();
-            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
