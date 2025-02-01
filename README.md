@@ -1,6 +1,5 @@
-# play.trading
+# Trading
 
-Play Economy Trading microservice
 
 ## Build the docker image
 
